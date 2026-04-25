@@ -93,9 +93,8 @@ def extract_clip(frames, start, end, size=(112, 112), num_frames=16):
 # =========================
 # 5. PREDICT SINGLE VIDEO
 # =========================
-def predict_video(video_path, chunk_seconds=2):
+def predict_video(video_path, chunk_seconds=2, threshold=70):
     cap = cv2.VideoCapture(video_path)
-
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     frames = []
@@ -112,6 +111,8 @@ def predict_video(video_path, chunk_seconds=2):
     results = []
     shoplifting_scores = []
 
+    alert_sent = False 
+
     for start in range(0, len(frames), chunk_size):
         end = min(start + chunk_size, len(frames))
 
@@ -125,7 +126,7 @@ def predict_video(video_path, chunk_seconds=2):
             output = model(clip)
             prob = torch.softmax(output, dim=1)
 
-            shoplifting_prob = prob[0, 1].item() * 100  # 🔥 percentage
+            shoplifting_prob = prob[0, 1].item() * 100
 
         start_sec = start / fps
         end_sec = end / fps
@@ -138,9 +139,14 @@ def predict_video(video_path, chunk_seconds=2):
         results.append((start_sec, end_sec, shoplifting_prob))
         shoplifting_scores.append((shoplifting_prob, start_sec, end_sec))
 
-    return results, shoplifting_scores
+        # 🔥 هنا نربط مع الإنذار
+        if shoplifting_prob >= threshold and not alert_sent:
+            print("🚨 Shoplifting detected! Sending warning...")
+            sendShopliftingWarning(video_path)
+            alert_sent = True  
 
-def test_predict_video(video_path, chunk_seconds=2):
+    return results, shoplifting_scores
+def sendShopliftingWarning(video_path, chunk_seconds=2):
     # تأكد من وجود مجلد media/shoplifting_videos
     media_folder = os.path.join(settings.MEDIA_ROOT, 'shoplifting_videos')
     os.makedirs(media_folder, exist_ok=True)
